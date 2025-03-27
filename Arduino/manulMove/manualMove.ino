@@ -98,4 +98,7 @@ void processCommand(String command) {
         Serial.print(" at speed ");
         Serial.println(speed);
     }
+    else if(command.startsWith("MOVE:")){
+        
+    }
 }
