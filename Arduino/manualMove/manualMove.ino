@@ -10,14 +10,15 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define MAXSERVONUM 16
 
 int servo_values[MAXSERVONUM][2];
-int servo_speed=50;
+
+String inputString = "";
+bool inputComplete = false;
 
 void setup() {
 
     for(int i=0; i<MAXSERVONUM; i++){
       servo_values[i][0]=(SERVOMIN+SERVOMAX)/2;
       servo_values[i][1]=(SERVOMIN+SERVOMAX)/2;
-      servo_speed=50;
     }
 
     Serial.begin(9600);
@@ -30,7 +31,7 @@ void setup() {
     delay(10);
 }
 
-void moveServoSmoothly(int setNumber, int* targetAngles) {
+void moveServoSmoothly(int setNumber, int* targetAngles, int speed) {
     int* currentAngle = servo_values[setNumber];
     int steps[2];
     for(int i=0; i<2; i++){
@@ -38,42 +39,63 @@ void moveServoSmoothly(int setNumber, int* targetAngles) {
     }
     while((currentAngle[0]!=targetAngles[0])||(currentAngle[1]!=targetAngles[1])){
       for(int i=0; i<2; i++){
-        currentAngle[i]+=steps[i];
+        if(currentAngle[i]!=targetAngles[i])
+            currentAngle[i]+=steps[i];
         pwm.setPWM((setNumber<<1)+i, 0, currentAngle[i]);
       }
-      delay(10*(101-servo_speed));
+      delay(10*(101-speed));
     }
     for(int i=0; i<2; i++){
       currentAngle[i]=targetAngles[i];
       pwm.setPWM((setNumber<<1)+i, 0, currentAngle[i]);
     }
 }
-
 void loop() {
+    // 시리얼 입력이 있을 경우 처리
     if (Serial.available()) {
-        String data = Serial.readStringUntil('\n');
-        char type;
-        int setNumber, val1, val2;
-
-        if (sscanf(data.c_str(), "%c,%d,%d,%d", &type, &setNumber, &val1, &val2) == 4) {
-
-            if (type == 'A') {  // 각도 변경
-                int servoValues[2] = {val1, val2};
-                moveServoSmoothly(setNumber, servoValues);
-                Serial.print("Set ");
-                Serial.print(setNumber);
-                Serial.print(": Servo1 Angle=");
-                Serial.print(servoValues[0]);
-                Serial.print(", Servo2 Angle=");
-                Serial.println(servoValues[1]);
-            } 
-            else if (type == 'S') {  // 속도 변경
-                servo_speed = val1;
-                Serial.print("Set ");
-                Serial.print(setNumber);
-                Serial.print(": Servo Speed=");
-                Serial.print(servo_speed);
-            }
+        char inChar = (char)Serial.read();
+        if (inChar == '\n') {
+            inputComplete = true;
+        } else {
+            inputString += inChar;
         }
+    }
+
+    // 데이터가 완성되면 처리
+    if (inputComplete) {
+        processCommand(inputString);
+        inputString = ""; // 입력 문자열 초기화
+        inputComplete = false;
+    }
+}
+
+// 명령어 처리 함수
+void processCommand(String command) {
+    if (command.startsWith("SET:")) {
+        int setNumber, speed, v1, v2;
+        sscanf(command.c_str(), "SET:%d, S:%d, V1:%d, V2:%d", 
+               &setNumber, &speed, &v1, &v2);
+        
+        if (setNumber < 0 || setNumber >= MAXSERVONUM) {
+            Serial.println("Error: Invalid Set Number");
+            return;
+        }
+
+        // 서보 이동
+        {
+            int targetValues[2] = {v1, v2};
+            moveServoSmoothly(setNumber, targetValues, speed);
+        }
+        
+
+        Serial.print("Servo 1 moved to: ");
+        Serial.print(v1);
+
+        Serial.print("Servo 2 moved to: ");
+        Serial.println(v2);
+
+
+        Serial.print(" at speed ");
+        Serial.println(speed);
     }
 }

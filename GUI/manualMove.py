@@ -1,120 +1,156 @@
-import serial
-import time
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
+import serial
 import serial.tools.list_ports
 
-# Get list of serial ports
-def get_serial_ports():
-    ports = serial.tools.list_ports.comports()
-    return [port.device for port in ports]
+# -------------------------------
+# 시리얼 포트 설정
+# -------------------------------
+class SerialConnection:
+    def __init__(self):
+        self.serial = None
 
-# Setup Arduino connection via serial port
-def connect_arduino(port):
-    try:
-        arduino = serial.Serial(port, 9600, timeout=1)
-        time.sleep(2)  # Wait for the serial connection to stabilize
-        return arduino
-    except serial.SerialException as e:
-        print(f"Connection failed: {e}")
+    def connect(self, port, baudrate=9600):
+        try:
+            self.serial = serial.Serial(port, baudrate, timeout=1)
+            return True
+        except serial.SerialException as e:
+            messagebox.showerror("Error", f"Failed to connect: {e}")
+            self.serial = None
+            return False
+
+    def disconnect(self):
+        if self.serial:
+            self.serial.close()
+            self.serial = None
+
+    def send(self, data):
+        if self.serial and self.serial.is_open:
+            self.serial.write((data + "\n").encode())
+
+    def receive(self):
+        if self.serial and self.serial.is_open and self.serial.in_waiting:
+            return self.serial.readline().decode().strip()
         return None
 
-# Create GUI window
-root = tk.Tk()
-root.title("Servo Motor Control")
+serial_conn = SerialConnection()
 
-# Serial port selection
-tk.Label(root, text="Select Serial Port", font=("Arial", 12)).pack(pady=5)
-port_list = get_serial_ports()
-port_var = tk.StringVar(value=port_list[0] if port_list else "")
-port_menu = ttk.Combobox(root, textvariable=port_var, values=port_list)
-port_menu.pack(pady=5)
+# -------------------------------
+# GUI 설정
+# -------------------------------
+class ServoControlApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Servo Motor Control")
+        
+        # 시리얼 포트 선택
+        self.port_label = tk.Label(root, text="Serial Port:")
+        self.port_label.grid(row=0, column=0)
+        self.port_combobox = ttk.Combobox(root, values=self.get_serial_ports())
+        self.port_combobox.grid(row=0, column=1)
+        self.connect_button = tk.Button(root, text="Connect", command=self.connect_serial)
+        self.connect_button.grid(row=0, column=2)
+        self.disconnect_button = tk.Button(root, text="Disconnect", command=self.disconnect_serial, state=tk.DISABLED)
+        self.disconnect_button.grid(row=0, column=3)
 
-# Connect button
-def connect_button_pressed():
-    selected_port = port_var.get()
-    global arduino
-    arduino = connect_arduino(selected_port)
-    if arduino:
-        connection_label.config(text=f"Connected: {selected_port}")
+        # 세트 선택 (1~100)
+        self.set_label = tk.Label(root, text="Set Number:")
+        self.set_label.grid(row=1, column=0)
+        self.set_combobox = ttk.Combobox(root, values=list(range(1, 101)))
+        self.set_combobox.grid(row=1, column=1)
+        self.set_combobox.current(0)
 
-connect_button = tk.Button(root, text="Connect", command=connect_button_pressed)
-connect_button.pack(pady=5)
+        # 스피드 선택
+        self.speed_label = tk.Label(root, text="Speed:")
+        self.speed_label.grid(row=2, column=0)
+        self.speed_entry = tk.Entry(root)
+        self.speed_entry.grid(row=2, column=1)
+        self.speed_entry.insert(0, "50")
 
-# Connection status label
-connection_label = tk.Label(root, text="Not connected", font=("Arial", 12, "italic"))
-connection_label.pack(pady=5)
+        # 서보 1 제어
+        self.servo1_label = tk.Label(root, text="Servo 1 Angle:")
+        self.servo1_label.grid(row=3, column=0)
+        self.servo1_entry = tk.Entry(root)
+        self.servo1_entry.grid(row=3, column=1)
+        self.servo1_entry.insert(0, "360")
 
-# Set selection
-tk.Label(root, text="Select Servo Set", font=("Arial", 12)).pack(pady=5)
-servo_sets = [f"Set {i+1}" for i in range(100)]
-set_var = tk.StringVar(value=servo_sets[0])
-set_menu = ttk.Combobox(root, textvariable=set_var, values=servo_sets)
-set_menu.pack(pady=5)
+        # 서보 2 제어
+        self.servo2_label = tk.Label(root, text="Servo 2 Angle:")
+        self.servo2_label.grid(row=4, column=0)
+        self.servo2_entry = tk.Entry(root)
+        self.servo2_entry.grid(row=4, column=1)
+        self.servo2_entry.insert(0, "360")
 
-# Servo 1 inputs
-tk.Label(root, text="Servo 1 Angle (120-600):", font=("Arial", 10)).pack()
-servo1_var = tk.StringVar(value="300")
-servo1_entry = tk.Entry(root, textvariable=servo1_var, width=5)
-servo1_entry.pack()
+        # 값 전송 버튼
+        self.send_button = tk.Button(root, text="Send Data", command=self.send_data)
+        self.send_button.grid(row=5, column=1)
 
-tk.Label(root, text="Servo 1 Speed (1-100):", font=("Arial", 10)).pack()
-servo1_speed_var = tk.StringVar(value="50")
-servo1_speed_entry = tk.Entry(root, textvariable=servo1_speed_var, width=5)
-servo1_speed_entry.pack()
+        # 아두이노 메시지 출력 창
+        self.msg_label = tk.Label(root, text="Arduino Messages:")
+        self.msg_label.grid(row=6, column=0)
+        self.msg_text = tk.Text(root, height=5, width=40)
+        self.msg_text.grid(row=6, column=0, columnspan=3)
+        
+        # 시리얼 메시지 수신 주기적 업데이트
+        self.update_serial()
 
-# Servo 2 inputs
-tk.Label(root, text="Servo 2 Angle (120-600):", font=("Arial", 10)).pack()
-servo2_var = tk.StringVar(value="300")
-servo2_entry = tk.Entry(root, textvariable=servo2_var, width=5)
-servo2_entry.pack()
+    def get_serial_ports(self):
+        """ 사용 가능한 시리얼 포트 목록 가져오기 """
+        ports = serial.tools.list_ports.comports()
+        return [port.device for port in ports]
 
-tk.Label(root, text="Servo 2 Speed (1-100):", font=("Arial", 10)).pack()
-servo2_speed_var = tk.StringVar(value="50")
-servo2_speed_entry = tk.Entry(root, textvariable=servo2_speed_var, width=5)
-servo2_speed_entry.pack()
+    def connect_serial(self):
+        """ 시리얼 포트 연결 """
+        port = self.port_combobox.get()
+        if port:
+            if serial_conn.connect(port):
+                self.connect_button.config(state=tk.DISABLED)
+                self.disconnect_button.config(state=tk.NORMAL)
+                messagebox.showinfo("Info", f"Connected to {port}")
+    
+    def disconnect_serial(self):
+        """ 시리얼 포트 연결 해제"""
+        serial_conn.disconnect()
+        self.connect_button.config(state=tk.NORMAL)
+        self.disconnect_button.config(state=tk.DISABLED)
 
-# Send servo angles button
-def send_servo_angles():
-    if arduino:
+    def send_data(self):
+        """ 서보 데이터를 아두이노로 전송 """
+        if serial_conn.serial is None:
+            messagebox.showerror("Error", "Serial connection not established!")
+            return
+        
         try:
-            servo1_value = int(servo1_var.get())
-            servo2_value = int(servo2_var.get())
-
-            if 120 <= servo1_value <= 600 and 120 <= servo2_value <= 600:
-                selected_set = set_var.get()
-                set_number = int(selected_set.split()[1])
-                command = f"A,{set_number},{servo1_value},{servo2_value}\n"
-                arduino.write(command.encode())
-                print(f"Sent Angle: {command.strip()}")
-            else:
-                print("Error: Angles out of range")
+            set_number = int(self.set_combobox.get())
+            speed = int(self.speed_entry.get())
+            servo1_angle = int(self.servo1_entry.get())
+            servo2_angle = int(self.servo2_entry.get())
+            
+            # 값 범위 체크 (120 ~ 600)
+            if not (120 <= servo1_angle <= 600 and 120 <= servo2_angle <= 600):
+                messagebox.showerror("Error", "Angle must be between 120 and 600")
+                return
+            
+            data = f"SET:{set_number}, S:{speed}, V1:{servo1_angle}, V2:{servo2_angle}"
+            serial_conn.send(data)
+            self.msg_text.insert(tk.END, f"Sent: {data}\n")
+            self.msg_text.see(tk.END)
         except ValueError:
-            print("Error: Invalid input")
+            messagebox.showerror("Error", "Invalid input! Please enter numbers.")
 
-send_angles_button = tk.Button(root, text="Send Servo Angles", command=send_servo_angles)
-send_angles_button.pack(pady=5)
+    def update_serial(self):
+        """ 아두이노 메시지 수신 """
+        message = serial_conn.receive()
+        if message:
+            self.msg_text.insert(tk.END, f"Arduino: {message}\n")
+            self.msg_text.see(tk.END)
+        
+        self.root.after(100, self.update_serial)  # 100ms마다 실행
 
-# Send servo speeds button
-def send_servo_speeds():
-    if arduino:
-        try:
-            servo1_speed = int(servo1_speed_var.get())
-            servo2_speed = int(servo2_speed_var.get())
-
-            if 1 <= servo1_speed <= 100 and 1 <= servo2_speed <= 100:
-                selected_set = set_var.get()
-                set_number = int(selected_set.split()[1])
-                command = f"S,{set_number},{servo1_speed},{servo2_speed}\n"
-                arduino.write(command.encode())
-                print(f"Sent Speed: {command.strip()}")
-            else:
-                print("Error: Speed out of range")
-        except ValueError:
-            print("Error: Invalid input")
-
-send_speeds_button = tk.Button(root, text="Send Servo Speeds", command=send_servo_speeds)
-send_speeds_button.pack(pady=5)
-
-# Start GUI loop
-root.mainloop()
+# -------------------------------
+# GUI 실행
+# -------------------------------
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ServoControlApp(root)
+    root.mainloop()
