@@ -72,6 +72,8 @@ class ServoControlApp:
         self.servo1_label.grid(row=3, column=0)
         self.servo1_entry = tk.Entry(root)
         self.servo1_entry.grid(row=3, column=1)
+        self.servo1_entry.bind("<Up>", lambda event: self.adjust_value(event, self.servo1_entry))
+        self.servo1_entry.bind("<Down>", lambda event: self.adjust_value(event, self.servo1_entry))
         self.servo1_entry.insert(0, "360")
 
         # 서보 2 제어
@@ -79,7 +81,11 @@ class ServoControlApp:
         self.servo2_label.grid(row=4, column=0)
         self.servo2_entry = tk.Entry(root)
         self.servo2_entry.grid(row=4, column=1)
+        self.servo2_entry.bind("<Up>", lambda event: self.adjust_value(event, self.servo2_entry))
+        self.servo2_entry.bind("<Down>", lambda event: self.adjust_value(event, self.servo2_entry))
         self.servo2_entry.insert(0, "360")
+        
+    
 
         # 값 전송 버튼
         self.send_button = tk.Button(root, text="Send Data", command=self.send_data)
@@ -146,6 +152,24 @@ class ServoControlApp:
             self.msg_text.see(tk.END)
         
         self.root.after(100, self.update_serial)  # 100ms마다 실행
+    
+    def adjust_value(self, event, entry, min_val=120, max_val=600, step=1):
+        """키보드로 서보 값을 미세하게 조정"""
+        try:
+            current_value = int(entry.get())
+            if event.keysym == "Up":  # 위쪽 화살표 키 (서보 1)
+                new_value = min(current_value + step, max_val)
+            elif event.keysym == "Down":  # 아래쪽 화살표 키 (서보 1)
+                new_value = max(current_value - step, min_val)
+            else:
+                return
+
+            entry.delete(0, tk.END)
+            entry.insert(0, str(new_value))
+
+            self.send_data()  # 값이 변경되면 자동 전송
+        except ValueError:
+            messagebox.showerror("Error", "Invalid input! Please enter numbers.")
 
 # -------------------------------
 # GUI 실행
