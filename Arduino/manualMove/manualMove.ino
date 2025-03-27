@@ -1,59 +1,78 @@
-#include <Servo.h>
+#include <Wire.h>
+#include <Adafruit_PWMServoDriver.h>
 
-Servo servo1, servo2;
-int setNumber = 1;
-int servo1_value = 300;
-int servo2_value = 300;
-int servo1_speed = 50;
-int servo2_speed = 50;
+#define SERVOMIN  150
+#define SERVOMAX  600
+#define SERVO_FREQ 50
+
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+
+#define MAXSERVONUM 16
+
+int servo_values[MAXSERVONUM][2];
+int servo_speed=50;
 
 void setup() {
+
+    for(int i=0; i<MAXSERVONUM; i++){
+      servo_values[i][0]=(SERVOMIN+SERVOMAX)/2;
+      servo_values[i][1]=(SERVOMIN+SERVOMAX)/2;
+      servo_speed=50;
+    }
+
     Serial.begin(9600);
-    servo1.attach(9);
-    servo2.attach(10);
+    Serial.println("8 channel Servo test!");
+
+    pwm.begin();
+    pwm.setOscillatorFrequency(27000000);
+    pwm.setPWMFreq(SERVO_FREQ);
+
+    delay(10);
 }
 
-void moveServoSmoothly(Servo &servo, int targetAngle, int speed) {
-    int currentAngle = servo.read();
-    int step = (targetAngle > currentAngle) ? 1 : -1;
-
-    for (int angle = currentAngle; angle != targetAngle; angle += step) {
-        servo.write(angle);
-        delay(10 * (101 - speed));  // 속도 조절
+void moveServoSmoothly(int setNumber, int* targetAngles) {
+    int* currentAngle = servo_values[setNumber];
+    int steps[2];
+    for(int i=0; i<2; i++){
+      steps[0]=(targetAngles[i] > currentAngle[i]) ? 1 : -1;
     }
-    servo.write(targetAngle);
+    while((currentAngle[0]!=targetAngles[0])||(currentAngle[1]!=targetAngles[1])){
+      for(int i=0; i<2; i++){
+        currentAngle[i]+=steps[i];
+        pwm.setPWM((setNumber<<1)+i, 0, currentAngle[i]);
+      }
+      delay(10*(101-servo_speed));
+    }
+    for(int i=0; i<2; i++){
+      currentAngle[i]=targetAngles[i];
+      pwm.setPWM((setNumber<<1)+i, 0, currentAngle[i]);
+    }
 }
 
 void loop() {
     if (Serial.available()) {
         String data = Serial.readStringUntil('\n');
         char type;
-        int newSet, val1, val2;
+        int setNumber, val1, val2;
 
-        if (sscanf(data.c_str(), "%c,%d,%d,%d", &type, &newSet, &val1, &val2) == 4) {
-            setNumber = newSet;
+        if (sscanf(data.c_str(), "%c,%d,%d,%d", &type, &setNumber, &val1, &val2) == 4) {
 
             if (type == 'A') {  // 각도 변경
-                servo1_value = val1;
-                servo2_value = val2;
-                moveServoSmoothly(servo1, servo1_value, servo1_speed);
-                moveServoSmoothly(servo2, servo2_value, servo2_speed);
+                int servoValues[2] = {val1, val2};
+                moveServoSmoothly(setNumber, servoValues);
                 Serial.print("Set ");
                 Serial.print(setNumber);
                 Serial.print(": Servo1 Angle=");
-                Serial.print(servo1_value);
+                Serial.print(servoValues[0]);
                 Serial.print(", Servo2 Angle=");
-                Serial.println(servo2_value);
+                Serial.println(servoValues[1]);
             } 
             else if (type == 'S') {  // 속도 변경
-                servo1_speed = val1;
-                servo2_speed = val2;
+                servo_speed = val1;
                 Serial.print("Set ");
                 Serial.print(setNumber);
-                Serial.print(": Servo1 Speed=");
-                Serial.print(servo1_speed);
-                Serial.print(", Servo2 Speed=");
-                Serial.println(servo2_speed);
+                Serial.print(": Servo Speed=");
+                Serial.print(servo_speed);
             }
         }
     }
