@@ -56,7 +56,7 @@ class ServoControlApp:
         # 세트 선택 (1~100)
         self.set_label = tk.Label(root, text="Set Number:")
         self.set_label.grid(row=1, column=0)
-        self.set_combobox = ttk.Combobox(root, values=list(range(1, 101)))
+        self.set_combobox = ttk.Combobox(root, values=list(range(0, 100)))
         self.set_combobox.grid(row=1, column=1)
         self.set_combobox.current(0)
 

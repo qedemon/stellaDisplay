@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 
-#define SERVOMIN  150
+#define SERVOMIN  120
 #define SERVOMAX  600
 #define SERVO_FREQ 50
 
@@ -56,6 +56,12 @@ void setup() {
     pwm.setPWMFreq(SERVO_FREQ);
 
     delay(10);
+
+    for(int i=0; i<MAXSERVONUM; i++){
+      for(int j=0; j<2; j++){
+        pwm.setPWM((i<<1)+j, 0, servo_values[i][j]);
+      }
+    }
 }
 
 void moveServoSmoothly(int setNumber, int* targetAngles, int speed) {
@@ -70,7 +76,7 @@ void moveServoSmoothly(int setNumber, int* targetAngles, int speed) {
             currentAngle[i]+=steps[i];
         pwm.setPWM((setNumber<<1)+i, 0, currentAngle[i]);
       }
-      delay(10*(101-speed));
+      //delay(10*(101-speed));
     }
     for(int i=0; i<2; i++){
       currentAngle[i]=targetAngles[i];
