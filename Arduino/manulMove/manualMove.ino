@@ -10,6 +10,15 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define MAXSERVONUM 16
 
 int servo_values[MAXSERVONUM][2];
+double servo_parameters[MAXSERVONUM][2][6];
+
+#define PARAMETERS_READ 1
+double servo_parameters_read[PARAMETERS_READ][2][6] = {
+    {
+        {(SERVOMIN+SERVOMAX)/2, 0, 0, 0, 0, 0},
+        {(SERVOMIN+SERVOMAX)/2, 0, 0, 0, 0, 0},
+    }
+};
 
 String inputString = "";
 bool inputComplete = false;
@@ -19,6 +28,24 @@ void setup() {
     for(int i=0; i<MAXSERVONUM; i++){
       servo_values[i][0]=(SERVOMIN+SERVOMAX)/2;
       servo_values[i][1]=(SERVOMIN+SERVOMAX)/2;
+    }
+
+    for(int i=0; i<MAXSERVONUM; i++){
+        if(i<PARAMETERS_READ){
+            for(int j=0; j<2; j++){
+                for(int k=0; k<6; k++){
+                    servo_parameters[i][j][k]=servo_parameters_read[i][j][k];
+                }
+            }
+        }
+        else{
+            for(int j=0; j<2; j++){
+                for(int k=0; k<6; k++){
+                    servo_parameters[i][j][k]=0;
+                }
+                servo_parameters[i][j][0]=(SERVOMIN+SERVOMAX)/2;
+            }
+        }
     }
 
     Serial.begin(9600);
@@ -35,7 +62,7 @@ void moveServoSmoothly(int setNumber, int* targetAngles, int speed) {
     int* currentAngle = servo_values[setNumber];
     int steps[2];
     for(int i=0; i<2; i++){
-      steps[0]=(targetAngles[i] > currentAngle[i]) ? 1 : -1;
+      steps[i]=(targetAngles[i] > currentAngle[i]) ? 1 : -1;
     }
     while((currentAngle[0]!=targetAngles[0])||(currentAngle[1]!=targetAngles[1])){
       for(int i=0; i<2; i++){
@@ -50,6 +77,25 @@ void moveServoSmoothly(int setNumber, int* targetAngles, int speed) {
       pwm.setPWM((setNumber<<1)+i, 0, currentAngle[i]);
     }
 }
+
+void mapPointToAngle(int setNumber, double* point, int* result){
+    for(int i=0; i<2; i++){
+        result[i] = round(
+            servo_parameters[setNumber][i][0]
+            + servo_parameters[setNumber][i][1] * point[0]
+            + servo_parameters[setNumber][i][2] * point[1]
+            + servo_parameters[setNumber][i][3] * point[0] * point[0]
+            + servo_parameters[setNumber][i][4] * point[1] * point[1]
+            + servo_parameters[setNumber][i][5] * point[0] * point[1]
+        );
+    }
+}
+void moveToPoint(int setNumber, double* targetPosition, int speed){
+    int targetAngle[2];
+    mapPointToAngle(setNumber, targetPosition, targetAngle);
+    moveServoSmoothly(setNumber, targetAngle, speed);
+}
+
 void loop() {
     // 시리얼 입력이 있을 경우 처리
     if (Serial.available()) {
@@ -99,6 +145,18 @@ void processCommand(String command) {
         Serial.println(speed);
     }
     else if(command.startsWith("MOVE:")){
+        int setNumber, speed, X, Y;
+        sscanf(command.c_str(), "MOVE:%d, S:%d, X:%d, Y:%d", 
+               &setNumber, &speed, &X, &Y);
         
+        {
+            double targetPosition[2] = {static_cast<double>(X), static_cast<double>(Y)};
+            moveToPoint(setNumber, targetPosition, speed);
+        }
+
+        Serial.print("Move to Position X:");
+        Serial.print(X);
+        Serial.print(", ");
+        Serial.println(Y);
     }
 }
