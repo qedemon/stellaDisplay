@@ -10,7 +10,7 @@ class SerialConnection:
     def __init__(self):
         self.serial = None
 
-    def connect(self, port, baudrate=9600):
+    def connect(self, port, baudrate=115200):
         try:
             self.serial = serial.Serial(port, baudrate, timeout=1)
             return True
@@ -84,18 +84,25 @@ class ServoControlApp:
         self.servo2_entry.bind("<Up>", lambda event: self.adjust_value(event, self.servo2_entry))
         self.servo2_entry.bind("<Down>", lambda event: self.adjust_value(event, self.servo2_entry))
         self.servo2_entry.insert(0, "360")
-        
+
+        self.servo2Offset_label = tk.Label(root, text="Servo 2 Offset:")
+        self.servo2Offset_label.grid(row=5, column=0)
+        self.servo2Offset_entry = tk.Entry(root)
+        self.servo2Offset_entry.grid(row=5, column=1)
+        self.servo2Offset_entry.insert(0, "0")
+        self.servo2Offset_entry.bind("<Up>", lambda event: self.adjust_value(event, self.servo2Offset_entry))
+        self.servo2Offset_entry.bind("<Down>", lambda event: self.adjust_value(event, self.servo2Offset_entry))
     
 
         # 값 전송 버튼
         self.send_button = tk.Button(root, text="Send Data", command=self.send_data)
-        self.send_button.grid(row=5, column=1)
+        self.send_button.grid(row=6, column=1)
 
         # 아두이노 메시지 출력 창
         self.msg_label = tk.Label(root, text="Arduino Messages:")
-        self.msg_label.grid(row=6, column=0)
+        self.msg_label.grid(row=7, column=0)
         self.msg_text = tk.Text(root, height=5, width=40)
-        self.msg_text.grid(row=6, column=0, columnspan=3)
+        self.msg_text.grid(row=7, column=0, columnspan=3)
         
         # 시리얼 메시지 수신 주기적 업데이트
         self.update_serial()

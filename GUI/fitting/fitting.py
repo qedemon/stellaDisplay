@@ -63,20 +63,28 @@ def remove_selected_data():
         messagebox.showerror("Selection Error", "Please select an item to remove!")
 
 def fit_data():
-    if len(X_values) < 3:
-        messagebox.showerror("Insufficient Data", "At least 3 data points are required.")
+    if len(X_values) < 6:
+        messagebox.showerror("Insufficient Data", "At least 6 data points are required.")
         return
     
-    A = np.vstack([X_values, Y_values, np.ones(len(X_values))]).T
+    A = np.vstack([
+        np.array(X_values)**2,
+        np.array(X_values) * np.array(Y_values),
+        np.array(Y_values)**2,
+        X_values,
+        Y_values,
+        np.ones(len(X_values))
+    ]).T
+    
     Theta = np.vstack([Theta1_values, Theta2_values]).T
     
-    W = np.linalg.inv(A.T @ A) @ A.T @ Theta
+    W = np.linalg.lstsq(A, Theta, rcond=None)[0]
     
-    a1, b1, c1 = W[:, 0]
-    a2, b2, c2 = W[:, 1]
+    a1, b1, c1, d1, e1, f1 = W[:, 0]
+    a2, b2, c2, d2, e2, f2 = W[:, 1]
     
-    result_text.set(f"θ1 = {a1:.4f}X + {b1:.4f}Y + {c1:.4f}\n"
-                    f"θ2 = {a2:.4f}X + {b2:.4f}Y + {c2:.4f}")
+    result_text.set(f"θ1 = {a1:.4f}X² + {b1:.4f}XY + {c1:.4f}Y² + {d1:.4f}X + {e1:.4f}Y + {f1:.4f}\n"
+                    f"θ2 = {a2:.4f}X² + {b2:.4f}XY + {c2:.4f}Y² + {d2:.4f}X + {e2:.4f}Y + {f2:.4f}")
 
 def load_saved_data():
     for X, Y, theta1, theta2 in zip(X_values, Y_values, Theta1_values, Theta2_values):
@@ -84,7 +92,7 @@ def load_saved_data():
 
 # Create UI
 root = tk.Tk()
-root.title("Least Squares Fitting")
+root.title("Quadratic Least Squares Fitting")
 
 # Input fields
 tk.Label(root, text="X:").grid(row=0, column=0)

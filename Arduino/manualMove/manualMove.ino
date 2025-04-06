@@ -5,18 +5,23 @@
 #define SERVOMAX  600
 #define SERVO_FREQ 50
 
-Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x41);
 
 #define MAXSERVONUM 16
 
 int servo_values[MAXSERVONUM][2];
 double servo_parameters[MAXSERVONUM][2][6];
+int servo2_offset = 0;
 
 #define PARAMETERS_READ 1
 double servo_parameters_read[PARAMETERS_READ][2][6] = {
+    /*{
+        {416.5377, -1.5357, -12.2100, 25.1623, 12.6698, 0.6176},
+        {373.8580, 83.6429, 5.8291, -8.2693, -2.2524, -35.9412},
+    }*/
     {
-        {(SERVOMIN+SERVOMAX)/2, 0, 0, 0, 0, 0},
-        {(SERVOMIN+SERVOMAX)/2, 0, 0, 0, 0, 0},
+      {360, 0, 0, 0, 0, 0},
+      {360, 0, 0, 0, 0, 0}
     }
 };
 
@@ -24,6 +29,10 @@ String inputString = "";
 bool inputComplete = false;
 
 void setup() {
+    //Wire.setSCL(PB_6);
+    //Wire.setSDA(PB_7);
+    //Serial.setRx(PA10);
+    //Serial.setTx(PA9);
 
     for(int i=0; i<MAXSERVONUM; i++){
       servo_values[i][0]=(SERVOMIN+SERVOMAX)/2;
@@ -48,38 +57,50 @@ void setup() {
         }
     }
 
-    Serial.begin(9600);
+    Serial.begin(115200);
     Serial.println("8 channel Servo test!");
 
     pwm.begin();
-    pwm.setOscillatorFrequency(27000000);
+    pwm.setOscillatorFrequency(25000000);
     pwm.setPWMFreq(SERVO_FREQ);
 
     delay(10);
 
-    for(int i=0; i<MAXSERVONUM; i++){
-      for(int j=0; j<2; j++){
-        pwm.setPWM((i<<1)+j, 0, servo_values[i][j]);
-      }
-    }
+    /*for(int i=0; i<MAXSERVONUM; i++){
+      double zero[2]={0, 0};
+      moveToPoint(i, zero, 100);
+    }*/
+}
+
+void moveServo(int setNumber, int* targetAngles=NULL){
+  int* target = (targetAngles==NULL)?servo_values[setNumber]:targetAngles;
+  servo_values[setNumber][0]=target[0];
+  servo_values[setNumber][1]=target[1]+servo2_offset;
+  for(int i=0; i<2; i++){
+    pwm.setPWM((setNumber<<1)+1, 0, servo_values[setNumber][i]);
+  }
 }
 
 void moveServoSmoothly(int setNumber, int* targetAngles, int speed) {
     int* currentAngle = servo_values[setNumber];
+    int targetAnglesWithOffset[2];
+    targetAnglesWithOffset[0]=targetAngles[0];
+    targetAnglesWithOffset[1]=targetAngles[1]+servo2_offset;
+
     int steps[2];
     for(int i=0; i<2; i++){
-      steps[i]=(targetAngles[i] > currentAngle[i]) ? 1 : -1;
+      steps[i]=(targetAnglesWithOffset[i] > currentAngle[i]) ? 1 : -1;
     }
-    while((currentAngle[0]!=targetAngles[0])||(currentAngle[1]!=targetAngles[1])){
+    while((currentAngle[0]!=targetAnglesWithOffset[0])||(currentAngle[1]!=targetAnglesWithOffset[1])){
       for(int i=0; i<2; i++){
-        if(currentAngle[i]!=targetAngles[i])
+        if(currentAngle[i]!=targetAnglesWithOffset[i])
             currentAngle[i]+=steps[i];
         pwm.setPWM((setNumber<<1)+i, 0, currentAngle[i]);
       }
-      //delay(10*(101-speed));
+      delay(4);
     }
     for(int i=0; i<2; i++){
-      currentAngle[i]=targetAngles[i];
+      currentAngle[i]=targetAnglesWithOffset[i];
       pwm.setPWM((setNumber<<1)+i, 0, currentAngle[i]);
     }
 }
@@ -149,6 +170,14 @@ void processCommand(String command) {
 
         Serial.print(" at speed ");
         Serial.println(speed);
+    }
+    else if(command.startsWith(("OFFSET:"))){
+      int o2;
+      sscanf(command.c_str(), "OFFSET: O2:%d", &o2);
+      servo2_offset=o2;
+      for(int i=0; i<MAXSERVONUM; i++){
+        moveServo(i);
+      }
     }
     else if(command.startsWith("MOVE:")){
         int setNumber, speed, X, Y;
