@@ -19,12 +19,12 @@ Adafruit_PWMServoDriver pwm[MAXDRIVERNUM] = {
 
 const int servoOffset[MAXDRIVERNUM][MAXSERVONUM][2] = {
   {
-    {350, 250},
-    {358, 355},
+    {359, 250},
+    {383, 358},
     {369, 350},
     {369, 376},
     {369, 376},
-    {350, 400},
+    {392, 360},
     {350, 350},
     {369, 350}
   },
@@ -34,8 +34,8 @@ const int servoOffset[MAXDRIVERNUM][MAXSERVONUM][2] = {
     {384, 351},
     {396, 337},
     {402, 372},
-    {350, 400},
-    {400, 350},
+    {421, 346},
+    {340, 360},
     {410, 367}
   },
   {
@@ -99,7 +99,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   for(int i=0; i<MAXSERVONUM; i++){
     for(int j=0; j<MAXDRIVERNUM; j++){
-      pwm[j].setPWM(i*2, 0, servoOffset[j][i][0]+random(-20, 20)+10);
+      pwm[j].setPWM(i*2, 0, servoOffset[j][i][0]+random(-20, 20));
       pwm[j].setPWM(i*2+1, 0, servoOffset[j][i][1]+random(-20, 20));
     }
     delay(300);

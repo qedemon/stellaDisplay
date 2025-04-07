@@ -1,28 +1,15 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
+#include "servoNum.h"
+#include "offset.h"
 
-#define SERVOMIN  120
-#define SERVOMAX  600
-#define SERVO_FREQ 50
-
-Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x41);
-
-#define MAXSERVONUM 16
-
-int servo_values[MAXSERVONUM][2];
-double servo_parameters[MAXSERVONUM][2][6];
-int servo2_offset = 0;
-
-#define PARAMETERS_READ 1
-double servo_parameters_read[PARAMETERS_READ][2][6] = {
-    /*{
-        {416.5377, -1.5357, -12.2100, 25.1623, 12.6698, 0.6176},
-        {373.8580, 83.6429, 5.8291, -8.2693, -2.2524, -35.9412},
-    }*/
-    {
-      {360, 0, 0, 0, 0, 0},
-      {360, 0, 0, 0, 0, 0}
-    }
+Adafruit_PWMServoDriver pwm[MAXDRIVERNUM] = {
+  Adafruit_PWMServoDriver(0x41),
+  Adafruit_PWMServoDriver(0x42),
+  Adafruit_PWMServoDriver(0x43),
+  Adafruit_PWMServoDriver(0x44),
+  Adafruit_PWMServoDriver(0x45),
+  Adafruit_PWMServoDriver(0x46)
 };
 
 String inputString = "";
@@ -34,37 +21,24 @@ void setup() {
     //Serial.setRx(PA10);
     //Serial.setTx(PA9);
 
-    for(int i=0; i<MAXSERVONUM; i++){
-      servo_values[i][0]=(SERVOMIN+SERVOMAX)/2;
-      servo_values[i][1]=(SERVOMIN+SERVOMAX)/2;
-    }
-
-    for(int i=0; i<MAXSERVONUM; i++){
-        if(i<PARAMETERS_READ){
-            for(int j=0; j<2; j++){
-                for(int k=0; k<6; k++){
-                    servo_parameters[i][j][k]=servo_parameters_read[i][j][k];
-                }
-            }
-        }
-        else{
-            for(int j=0; j<2; j++){
-                for(int k=0; k<6; k++){
-                    servo_parameters[i][j][k]=0;
-                }
-                servo_parameters[i][j][0]=(SERVOMIN+SERVOMAX)/2;
-            }
-        }
-    }
 
     Serial.begin(115200);
     Serial.println("8 channel Servo test!");
 
-    pwm.begin();
-    pwm.setOscillatorFrequency(25000000);
-    pwm.setPWMFreq(SERVO_FREQ);
+    for(int i=0; i<MAXDRIVERNUM; i++){
+      pwm[i].begin();
+      pwm[i].setOscillatorFrequency(25000000);
+      pwm[i].setPWMFreq(SERVO_FREQ);
+    }
 
     delay(10);
+
+
+    /*for(int i=0; i<TOTAL_SERVO_NUM; i++){
+      int driverIndex = i/MAXSERVONUM;
+      int servoIndex = i%MAXSERVONUM;
+      move(i, servoOffset[driverIndex][servoIndex][0]-65, servoOffset[driverIndex][servoIndex][1]);
+    }*/
 
     /*for(int i=0; i<MAXSERVONUM; i++){
       double zero[2]={0, 0};
@@ -72,7 +46,14 @@ void setup() {
     }*/
 }
 
-void moveServo(int setNumber, int* targetAngles=NULL){
+void move(int setIndex, int X, int Y){
+  int driverIndex = setIndex/MAXSERVONUM;
+  int servoIndex = setIndex%MAXSERVONUM;
+  pwm[driverIndex].setPWM(servoIndex*2, 0, X);
+  pwm[driverIndex].setPWM(servoIndex*2+1, 0, Y);
+}
+
+/*void moveServo(int setNumber, int* targetAngles=NULL){
   int* target = (targetAngles==NULL)?servo_values[setNumber]:targetAngles;
   servo_values[setNumber][0]=target[0];
   servo_values[setNumber][1]=target[1]+servo2_offset;
@@ -121,7 +102,7 @@ void moveToPoint(int setNumber, double* targetPosition, int speed){
     int targetAngle[2];
     mapPointToAngle(setNumber, targetPosition, targetAngle);
     moveServoSmoothly(setNumber, targetAngle, speed);
-}
+}*/
 
 void loop() {
     // 시리얼 입력이 있을 경우 처리
@@ -149,16 +130,20 @@ void processCommand(String command) {
         sscanf(command.c_str(), "SET:%d, S:%d, V1:%d, V2:%d", 
                &setNumber, &speed, &v1, &v2);
         
-        if (setNumber < 0 || setNumber >= MAXSERVONUM) {
+        if (setNumber < 0) {
             Serial.println("Error: Invalid Set Number");
             return;
         }
 
         // 서보 이동
-        {
-            int targetValues[2] = {v1, v2};
-            moveServoSmoothly(setNumber, targetValues, speed);
-        }
+        int X=v1;
+        int Y=v2;
+        move(setNumber, X, Y);
+
+        Serial.print("Move to Position X:");
+        Serial.print(X);
+        Serial.print(", ");
+        Serial.println(Y);
         
 
         Serial.print("Servo 1 moved to: ");
@@ -170,28 +155,5 @@ void processCommand(String command) {
 
         Serial.print(" at speed ");
         Serial.println(speed);
-    }
-    else if(command.startsWith(("OFFSET:"))){
-      int o2;
-      sscanf(command.c_str(), "OFFSET: O2:%d", &o2);
-      servo2_offset=o2;
-      for(int i=0; i<MAXSERVONUM; i++){
-        moveServo(i);
-      }
-    }
-    else if(command.startsWith("MOVE:")){
-        int setNumber, speed, X, Y;
-        sscanf(command.c_str(), "MOVE:%d, S:%d, X:%d, Y:%d", 
-               &setNumber, &speed, &X, &Y);
-        
-        {
-            double targetPosition[2] = {static_cast<double>(X), static_cast<double>(Y)};
-            moveToPoint(setNumber, targetPosition, speed);
-        }
-
-        Serial.print("Move to Position X:");
-        Serial.print(X);
-        Serial.print(", ");
-        Serial.println(Y);
     }
 }
